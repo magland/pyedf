@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any, Union
 from copy import deepcopy
 from math import floor
 from struct import pack, unpack
@@ -213,37 +213,39 @@ class EDFWriter:
 
 
 class EDFReader:
-    def __init__(self, fname: Optional[str] = None):
-        self.fname = None
+    def __init__(self, fname_or_file: Optional[Union[str, Any]] = None):
+        self.fname_or_file = None
         self.meas_info = None
         self.chan_info = None
         self.calibrate = None
         self.offset = None
-        if fname:
-            self.open(fname)
+        if fname_or_file:
+            self.open(fname_or_file)
 
-    def open(self, fname: str):
-        with open(fname, "rb") as fid:
-            assert fid.tell() == 0
-        self.fname = fname
+    def open(self, fname_or_file: Union[str, Any]):
+        self.fname_or_file = fname_or_file
         self.readHeader()
         return self.meas_info, self.chan_info
 
     def close(self):
-        self.fname = None
+        self.fname_or_file = None
         self.meas_info = None
         self.chan_info = None
         self.calibrate = None
         self.offset = None
 
     def readHeader(self):
-        if self.fname is None:
+        if self.fname_or_file is None:
             raise ValueError("Reader is not open")
         # the following is copied over from MNE-Python and subsequently modified
         # to more closely reflect the native EDF standard
         meas_info = {}
         chan_info = {}
-        with open(self.fname, "rb") as fid:
+        if isinstance(self.fname_or_file, str):
+            fid = open(self.fname_or_file, "rb")
+        else:
+            fid = self.fname_or_file
+        try:
             assert fid.tell() == 0
 
             meas_info["magic"] = fid.read(8).strip().decode()
@@ -271,7 +273,10 @@ class EDFReader:
             if len(subtype) > 0:
                 meas_info["subtype"] = subtype
             else:
-                meas_info["subtype"] = os.path.splitext(self.fname)[1][1:].lower()
+                if isinstance(self.fname_or_file, str):
+                    meas_info["subtype"] = os.path.splitext(self.fname_or_file)[1][1:].lower()
+                else:
+                    meas_info["subtype"] = "edf"  # is this right?
 
             if meas_info["subtype"] in ("24BIT", "bdf"):
                 meas_info["data_size"] = 3  # 24-bit (3 byte) integers
@@ -361,10 +366,16 @@ class EDFReader:
 
             if meas_info["n_records"] == -1:
                 # this happens if the n_records is not updated at the end of recording
-                tot_samps = (
-                    os.path.getsize(self.fname) - meas_info["data_offset"]
-                ) / meas_info["data_size"]
-                meas_info["n_records"] = tot_samps / sum(n_samps)
+                if isinstance(self.fname_or_file, str):
+                    tot_samps = (
+                        os.path.getsize(self.fname_or_file) - meas_info["data_offset"]
+                    ) / meas_info["data_size"]
+                    meas_info["n_records"] = tot_samps / sum(n_samps)
+                else:
+                    raise Exception('Cannot determine n_records from a file object')
+        finally:
+            if isinstance(self.fname_or_file, str):
+                fid.close()
 
         self.calibrate = (chan_info["physical_max"] - chan_info["physical_min"]) / (
             chan_info["digital_max"] - chan_info["digital_min"]
@@ -408,7 +419,7 @@ class EDFReader:
         return raw
 
     def readSamples(self, channel: int, begsample: int, endsample: int):
-        if self.fname is None:
+        if self.fname_or_file is None:
             raise ValueError("Reader is not open")
         chan_info = self.chan_info
         if chan_info is None:
@@ -416,11 +427,18 @@ class EDFReader:
         n_samps = chan_info["n_samps"][channel]
         begblock = int(floor((begsample) / n_samps))
         endblock = int(floor((endsample) / n_samps))
-        with open(self.fname, "rb") as fid:
+        if isinstance(self.fname_or_file, str):
+            fid = open(self.fname_or_file, "rb")
+        else:
+            fid = self.fname_or_file
+        try:
             data_blocks = [
                 self.readBlockForChannel(fid, block, channel)
                 for block in range(begblock, endblock + 1)
             ]
+        finally:
+            if isinstance(self.fname_or_file, str):
+                fid.close()
         data = np.concatenate(data_blocks)
 
         begsample -= begblock * n_samps
