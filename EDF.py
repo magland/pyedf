@@ -213,7 +213,7 @@ class EDFWriter:
 
 
 class EDFReader:
-    def __init__(self, fname=None):
+    def __init__(self, fname: Optional[str] = None):
         self.fname = None
         self.meas_info = None
         self.chan_info = None
@@ -222,7 +222,7 @@ class EDFReader:
         if fname:
             self.open(fname)
 
-    def open(self, fname):
+    def open(self, fname: str):
         with open(fname, "rb") as fid:
             assert fid.tell() == 0
         self.fname = fname
@@ -381,7 +381,7 @@ class EDFReader:
         self.chan_info = chan_info
         return (meas_info, chan_info)
 
-    def readBlockForChannel(self, fid, block, channel):
+    def readBlockForChannel(self, fid, block: int, channel: int):
         assert block >= 0
         meas_info = self.meas_info
         chan_info = self.chan_info
@@ -407,7 +407,7 @@ class EDFReader:
         raw += self.offset[channel]
         return raw
 
-    def readSamples(self, channel, begsample, endsample):
+    def readSamples(self, channel: int, begsample: int, endsample: int):
         if self.fname is None:
             raise ValueError("Reader is not open")
         chan_info = self.chan_info
@@ -457,7 +457,7 @@ class EDFReader:
             raise ValueError("No chan_info has been read")
         return self.chan_info["n_samps"] * self.meas_info["n_records"]
 
-    def readSignal(self, chanindx):
+    def readSignal(self, chanindx: int):
         if self.meas_info is None:
             raise ValueError("No meas_info has been read")
         if self.chan_info is None:
@@ -469,7 +469,7 @@ class EDFReader:
         return self.readSamples(chanindx, begsample, endsample)
 
 
-def padtrim(buf, num):
+def padtrim(buf: str, num: int):
     num -= len(buf)
     if num >= 0:
         # pad the input to the specified length
