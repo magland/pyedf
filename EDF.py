@@ -303,7 +303,6 @@ class EDFReader():
         assert(block>=0)
         meas_info = self.meas_info
         chan_info = self.chan_info
-        assert(fid.tell() == 0)
         blocksize = np.sum(chan_info['n_samps']) * meas_info['data_size']
         fid.seek(meas_info['data_offset'] + block * blocksize + np.sum(chan_info['n_samps'][:channel])*meas_info['data_size'])
         buf = fid.read(chan_info['n_samps'][channel]*meas_info['data_size'])
@@ -351,31 +350,3 @@ class EDFReader():
         begsample = 0;
         endsample = self.chan_info['n_samps'][chanindx] * self.meas_info['n_records'] - 1;
         return self.readSamples(chanindx, begsample, endsample)
-
-####################################################################################################
-
-if False:
-    file_in = EDFReader()
-    file_in.open('/Users/roboos/day 01[10.03].edf')
-    print file_in.readSamples(0, 0, 0)
-    print file_in.readSamples(0, 0, 128)
-
-
-if False:
-    file_in = EDFReader()
-    file_in.open('/Users/roboos/test_generator.edf')
-
-    file_out = EDFWriter()
-    file_out.open('/Users/roboos/test_generator copy.edf')
-
-    header = file_in.readHeader()
-
-    file_out.writeHeader(header)
-
-    meas_info = header[0]
-    for i in range(meas_info['n_records']):
-        data = file_in.readBlock(i)
-        file_out.writeBlock(data)
-
-    file_in.close()
-    file_out.close()
