@@ -299,22 +299,18 @@ class EDFReader():
         self.chan_info = chan_info
         return (meas_info, chan_info)
 
-    def readBlock(self, block):
+    def readBlockForChannel(self, fid, block, channel):
         assert(block>=0)
         meas_info = self.meas_info
         chan_info = self.chan_info
-        data = []
-        with open(self.fname, 'rb') as fid:
-            assert(fid.tell() == 0)
-            blocksize = np.sum(chan_info['n_samps']) * meas_info['data_size']
-            fid.seek(meas_info['data_offset'] + block * blocksize)
-            for i in range(meas_info['nchan']):
-                buf = fid.read(chan_info['n_samps'][i]*meas_info['data_size'])
-                raw = np.asarray(unpack('<{}h'.format(chan_info['n_samps'][i]), buf), dtype=np.float32)
-                raw *= self.calibrate[i]
-                raw += self.offset[i]  # FIXME I am not sure about the order of calibrate and offset
-                data.append(raw)
-        return data
+        assert(fid.tell() == 0)
+        blocksize = np.sum(chan_info['n_samps']) * meas_info['data_size']
+        fid.seek(meas_info['data_offset'] + block * blocksize + np.sum(chan_info['n_samps'][:channel])*meas_info['data_size'])
+        buf = fid.read(chan_info['n_samps'][channel]*meas_info['data_size'])
+        raw = np.asarray(unpack('<{}h'.format(chan_info['n_samps'][channel]), buf), dtype=np.float32)
+        raw *= self.calibrate[channel]
+        raw += self.offset[channel]
+        return raw
 
     def readSamples(self, channel, begsample, endsample):
         meas_info = self.meas_info
@@ -322,9 +318,13 @@ class EDFReader():
         n_samps = chan_info['n_samps'][channel]
         begblock = int(floor((begsample) / n_samps))
         endblock = int(floor((endsample) / n_samps))
-        data = self.readBlock(begblock)[channel]
-        for block in range(begblock+1, endblock+1):
-            data = np.append(data, self.readBlock(block)[channel])
+        with open(self.fname, 'rb') as fid:
+            data_blocks = [
+                self.readBlockForChannel(fid, block, channel)
+                for block in range(begblock, endblock+1)
+            ]
+        data = np.concatenate(data_blocks)
+
         begsample -= begblock*n_samps
         endsample -= begblock*n_samps
         return data[begsample:(endsample+1)]
